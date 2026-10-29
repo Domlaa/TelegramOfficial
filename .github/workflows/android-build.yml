@@ -29,17 +29,17 @@ jobs:
             task: ":TMessagesProj_App:assembleAfatRelease"
             artifact-path: TMessagesProj_App/build/outputs/apk
           # Google Play 版 AAB（上架用）
-          - name: app-bundle
-            task: ":TMessagesProj_App:bundleBundleAfatRelease"
-            artifact-path: TMessagesProj_App/build/outputs/bundle
+          # - name: app-bundle
+          #   task: ":TMessagesProj_App:bundleBundleAfatRelease"
+          #   artifact-path: TMessagesProj_App/build/outputs/bundle
           # 官网独立分发版 APK（telegram.org 直接下载）
           - name: standalone-apk
             task: ":TMessagesProj_AppStandalone:assembleAfatStandalone"
             artifact-path: TMessagesProj_AppStandalone/build/outputs/apk
           # 华为应用市场版 APK
-          - name: huawei-apk
-            task: ":TMessagesProj_AppHuawei:assembleAfatRelease"
-            artifact-path: TMessagesProj_AppHuawei/build/outputs/apk
+          # - name: huawei-apk
+          #   task: ":TMessagesProj_AppHuawei:assembleAfatRelease"
+          #   artifact-path: TMessagesProj_AppHuawei/build/outputs/apk
 
     # secrets 不能直接在 if 中引用，需先映射到 env
     env:
