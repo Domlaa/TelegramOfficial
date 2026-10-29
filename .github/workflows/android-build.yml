@@ -44,7 +44,15 @@ jobs:
       HAS_RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
 
     steps:
+      # submodules: recursive 是必须的：
+      # TMessagesProj_Modules/media 与 TMessagesProj/jni/** 均为子模块，
+      # 默认 checkout 只留下 gitlink 空目录，会导致 settings.gradle 找不到 media/core_settings.gradle，
+      # 以及 NDK 编译阶段缺少 native 源码。
+      # fetch-depth: 0 用于避免子模块固定在具体 commit 时浅克隆取不到该提交。
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
