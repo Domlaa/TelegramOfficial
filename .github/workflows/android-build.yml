@@ -1,0 +1,96 @@
+name: Android Build
+
+on:
+  push:
+    branches: [master, dev, xning]
+  pull_request:
+  workflow_dispatch:
+
+# 并发控制：同一分支的新提交会取消正在运行的旧构建
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NDK_VERSION: "21.4.7075529"
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Google Play 版 APK
+          - name: app-apk
+            task: ":TMessagesProj_App:assembleAfatRelease"
+            artifact-path: TMessagesProj_App/build/outputs/apk
+          # Google Play 版 AAB（上架用）
+          - name: app-bundle
+            task: ":TMessagesProj_App:bundleBundleAfatRelease"
+            artifact-path: TMessagesProj_App/build/outputs/bundle
+          # 官网独立分发版 APK（telegram.org 直接下载）
+          - name: standalone-apk
+            task: ":TMessagesProj_AppStandalone:assembleAfatStandalone"
+            artifact-path: TMessagesProj_AppStandalone/build/outputs/apk
+          # 华为应用市场版 APK
+          - name: huawei-apk
+            task: ":TMessagesProj_AppHuawei:assembleAfatRelease"
+            artifact-path: TMessagesProj_AppHuawei/build/outputs/apk
+
+    # secrets 不能直接在 if 中引用，需先映射到 env
+    env:
+      HAS_RELEASE_KEYSTORE: ${{ secrets.RELEASE_KEYSTORE_BASE64 != '' }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      # ubuntu-latest runner 已预装 Android SDK 并设好 ANDROID_HOME，无需 setup-android
+      - name: Install NDK ${{ env.NDK_VERSION }}
+        run: |
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          yes | "$SDKMANAGER" --licenses > /dev/null
+          "$SDKMANAGER" --install "ndk;${{ env.NDK_VERSION }}"
+          echo "ndk.dir=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> local.properties
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          # Telegram 自带的 wrapper.jar 不在官方校验清单内，跳过校验
+          validate-wrappers: false
+          cache-read-only: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/xning' }}
+
+      # 可选：如需真实签名，在仓库 Settings > Secrets 中配置后以 secrets 覆盖
+      # 仓库内已自带 dummy 密钥，跳过此步也能正常出包
+      - name: Override signing config (optional)
+        if: env.HAS_RELEASE_KEYSTORE == 'true'
+        env:
+          KEYSTORE_B64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          STORE_PASSWORD: ${{ secrets.RELEASE_STORE_PASSWORD }}
+        run: |
+          echo "$KEYSTORE_B64" | base64 -d > TMessagesProj/config/release.keystore
+          sed -i "s/^RELEASE_KEY_PASSWORD=.*/RELEASE_KEY_PASSWORD=$KEY_PASSWORD/" gradle.properties
+          sed -i "s/^RELEASE_KEY_ALIAS=.*/RELEASE_KEY_ALIAS=$KEY_ALIAS/" gradle.properties
+          sed -i "s/^RELEASE_STORE_PASSWORD=.*/RELEASE_STORE_PASSWORD=$STORE_PASSWORD/" gradle.properties
+
+      - name: Build ${{ matrix.task }}
+        run: ./gradlew ${{ matrix.task }} --stacktrace
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}-${{ github.sha }}
+          path: |
+            ${{ matrix.artifact-path }}/**/*.apk
+            ${{ matrix.artifact-path }}/**/*.aab
+          if-no-files-found: error
+          retention-days: 14
