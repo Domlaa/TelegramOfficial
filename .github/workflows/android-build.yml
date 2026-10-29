@@ -12,7 +12,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NDK_VERSION: "21.4.7075529"
+  # 必须与各模块 build.gradle 中的 android.ndkVersion 保持一致（当前为 27.2.12479018），
+  # 否则 AGP 会报 CXX1104：ndk.dir 指定的版本与 android.ndkVersion 冲突。
+  NDK_VERSION: "27.2.12479018"
 
 jobs:
   build:
@@ -61,12 +63,14 @@ jobs:
           java-version: 17
 
       # ubuntu-latest runner 已预装 Android SDK 并设好 ANDROID_HOME，无需 setup-android
+      # 注意：不要再写 local.properties 的 ndk.dir。该属性已废弃，且会与模块级
+      # android.ndkVersion 形成两个来源，版本不一致时直接导致配置阶段失败。
       - name: Install NDK ${{ env.NDK_VERSION }}
         run: |
           SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
           yes | "$SDKMANAGER" --licenses > /dev/null
           "$SDKMANAGER" --install "ndk;${{ env.NDK_VERSION }}"
-          echo "ndk.dir=$ANDROID_HOME/ndk/${{ env.NDK_VERSION }}" >> local.properties
+          "$SDKMANAGER" --install "cmake;3.22.1"
 
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
